@@ -19,7 +19,7 @@ def user_click_stream_events():
 
 def user_playback_events():
 
-    raw_df = spark.read.table("streampulse.bronze.user_playback_events")
+    raw_df = dp.read_stream("streampulse.bronze.user_playback_events")
 
     return (
         raw_df.select(
@@ -29,7 +29,7 @@ def user_playback_events():
     
 def user_playback_events():
 
-    raw_df = spark.read.table("streampulse.bronze.user_playback_events")
+    raw_df = dp.read_stream("streampulse.bronze.user_playback_events")
 
     return (
         raw_df.select(

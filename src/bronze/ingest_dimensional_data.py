@@ -20,7 +20,7 @@ def content_catalog_dim():
         .format("cloudFiles")
         .option("cloudFiles.format", "json")
         .option("cloudFiles.inferColumnTypes", "true")
-        .option("cloudFiles.schemaLocation", "abfss://dimensions@streampulse.dfs.core.windows.net/checkpoints/schema")
+        .option("cloudFiles.schemaLocation", "abfss://dimensions@streampulse.dfs.core.windows.net/checkpoints/schema/content-catalog")
         .load("abfss://dimensions@streampulse.dfs.core.windows.net/content-catalog/")
     )
 
@@ -31,7 +31,7 @@ def user_profile_dim():
         .format("cloudFiles")
         .option("cloudFiles.format", "json")
         .option("cloudFiles.inferColumnTypes", "true")
-        .option("cloudFiles.schemaLocation", "abfss://dimensions@streampulse.dfs.core.windows.net/checkpoints/schema")
+        .option("cloudFiles.schemaLocation", "abfss://dimensions@streampulse.dfs.core.windows.net/checkpoints/schema/user-profiles")
         .load("abfss://dimensions@streampulse.dfs.core.windows.net/user-profiles/")
     )
 
