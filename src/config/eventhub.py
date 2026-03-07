@@ -16,7 +16,7 @@ CLICK_STREAM_EVENTS_KAFKA_OPTIONS = {
   "kafka.request.timeout.ms" :10000,
   "kafka.session.timeout.ms" : 10000,
   "maxOffsetsPerTrigger"     : 10000,
-  "failOnDataLoss"           : 'true',
+  "failOnDataLoss"           : 'false',
   "startingOffsets"          : "latest"
 }
 
