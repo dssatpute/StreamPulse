@@ -6,7 +6,7 @@ client_id = dbutils.secrets.get(scope="streampulse", key="SP_CLIENT_ID")
 tenant_id = dbutils.secrets.get(scope="streampulse", key="SP_TENANT_ID")
 client_secret = dbutils.secrets.get(scope="streampulse", key="SP_CLIENT_SECRET")
 
-# Set configs at the Spark session level instead of passing via .options()
+# Set configs at the Spark session level for cross-cloud Azure access
 spark.conf.set("fs.azure.account.auth.type.streampulse.dfs.core.windows.net", "OAuth")
 spark.conf.set("fs.azure.account.oauth.provider.type.streampulse.dfs.core.windows.net", "org.apache.hadoop.fs.azurebfs.oauth2.ClientCredsTokenProvider")
 spark.conf.set("fs.azure.account.oauth2.client.id.streampulse.dfs.core.windows.net", client_id)
@@ -20,7 +20,9 @@ def content_catalog_dim():
         .format("cloudFiles")
         .option("cloudFiles.format", "json")
         .option("cloudFiles.inferColumnTypes", "true")
-        .option("cloudFiles.schemaLocation", "abfss://dimensions@streampulse.dfs.core.windows.net/checkpoints/schema/content-catalog")
+        .option("cloudFiles.schemaEvolutionMode", "addNewColumns")
+        .option("cloudFiles.maxFilesPerTrigger", "1000")
+        .option("ignoreCorruptFiles", "true")
         .load("abfss://dimensions@streampulse.dfs.core.windows.net/content-catalog/")
     )
 
@@ -31,7 +33,8 @@ def user_profile_dim():
         .format("cloudFiles")
         .option("cloudFiles.format", "json")
         .option("cloudFiles.inferColumnTypes", "true")
-        .option("cloudFiles.schemaLocation", "abfss://dimensions@streampulse.dfs.core.windows.net/checkpoints/schema/user-profiles")
+        .option("cloudFiles.schemaEvolutionMode", "addNewColumns")
+        .option("cloudFiles.maxFilesPerTrigger", "1000")
+        .option("ignoreCorruptFiles", "true")
         .load("abfss://dimensions@streampulse.dfs.core.windows.net/user-profiles/")
     )
-
