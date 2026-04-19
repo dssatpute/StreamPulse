@@ -1,0 +1,1 @@
+"""StreamPulse data generator package."""

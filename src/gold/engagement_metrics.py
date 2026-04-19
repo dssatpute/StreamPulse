@@ -1,6 +1,50 @@
 import pyspark.sql.functions as f
+from pyspark.sql import SparkSession
 from pyspark.sql.window import Window
 from pyspark import pipelines as dp
+
+spark = SparkSession.getActiveSession() or SparkSession.builder.getOrCreate()
+
+TRENDING_WINDOW_DURATION = "5 minutes"
+TRENDING_WATERMARK_DELAY = "15 minutes"
+ENGAGEMENT_SESSION_GAP_DURATION = "30 minutes"
+ENGAGEMENT_WATERMARK_DELAY = "2 hours"
+
+
+@dp.table(
+    name="streampulse.gold.trending_title_viewers_5m",
+    comment=(
+        "Streaming aggregate of unique viewers by content in 5-minute windows. "
+        "Uses event-time watermarking to bound state and handle late arrivals."
+    ),
+    table_properties={
+        "quality": "gold",
+        "delta.autoOptimize.optimizeWrite": "true",
+    },
+)
+def trending_title_viewers_5m():
+    playback_events = (
+        spark.readStream.table("streampulse.silver.user_playback_events")
+        .withWatermark("event_timestamp", TRENDING_WATERMARK_DELAY)
+        .dropDuplicates(["event_id"])
+        .filter(f.col("event_type").isin("play", "heartbeat"))
+    )
+
+    return (
+        playback_events
+        .groupBy(
+            f.window("event_timestamp", TRENDING_WINDOW_DURATION).alias("event_window"),
+            f.col("content_id"),
+        )
+        .agg(f.count_distinct("user_id").alias("unique_viewers"))
+        .select(
+            f.col("event_window.start").alias("window_start"),
+            f.col("event_window.end").alias("window_end"),
+            "content_id",
+            "unique_viewers",
+        )
+        .withColumn("computed_at", f.current_timestamp())
+    )
 
 @dp.table(
     name="streampulse.gold.top_trending_titles",
@@ -16,18 +60,18 @@ from pyspark import pipelines as dp
     },
 )
 def top_trending_titles():
-    # Batch read of silver — Materialized View, recomputed each trigger.
-    # Filter to last 5 minutes in application time to approximate a rolling window.
-    five_minutes_ago = f.current_timestamp() - f.expr("INTERVAL 25 MINUTES")
+    viewer_counts = dp.read("streampulse.gold.trending_title_viewers_5m")
 
-    viewer_counts = (
-        dp.read("streampulse.silver.user_playback_events")
-        .filter(
-            f.col("event_type").isin("play", "heartbeat")
-            # & (f.col("event_timestamp") >= five_minutes_ago)
+    latest_window = viewer_counts.agg(f.max("window_end").alias("latest_window_end"))
+
+    latest_viewer_counts = (
+        viewer_counts
+        .join(
+            latest_window,
+            viewer_counts.window_end == latest_window.latest_window_end,
+            "inner",
         )
-        .groupBy("content_id")
-        .agg(f.count_distinct("user_id").alias("unique_viewers"))
+        .drop("latest_window_end")
     )
 
     content_dim = (
@@ -40,13 +84,15 @@ def top_trending_titles():
     rank_window = Window.orderBy(f.col("unique_viewers").desc())
 
     return (
-        viewer_counts
+        latest_viewer_counts
         .join(content_dim, "content_id", "left")
         .withColumn("rank", f.rank().over(rank_window))
         .filter(f.col("rank") <= 10)
         .withColumn("computed_at", f.current_timestamp())
         .select(
             "rank",
+            "window_start",
+            "window_end",
             "content_id",
             "title",
             "genre",
@@ -56,6 +102,55 @@ def top_trending_titles():
             "unique_viewers",
             "computed_at",
         )
+    )
+
+
+@dp.table(
+    name="streampulse.gold.content_session_stats",
+    comment=(
+        "Streaming per-session playback aggregates using event-time session windows. "
+        "Watermarking bounds state and limits late-arrival impact."
+    ),
+    table_properties={
+        "quality": "gold",
+        "delta.autoOptimize.optimizeWrite": "true",
+    },
+)
+def content_session_stats():
+    playback_events = (
+        spark.readStream.table("streampulse.silver.user_playback_events")
+        .withWatermark("event_timestamp", ENGAGEMENT_WATERMARK_DELAY)
+        .dropDuplicates(["event_id"])
+    )
+
+    return (
+        playback_events
+        .groupBy(
+            f.session_window("event_timestamp", ENGAGEMENT_SESSION_GAP_DURATION).alias("event_session"),
+            f.col("content_id"),
+            f.col("session_id"),
+            f.col("user_id"),
+        )
+        .agg(
+            f.max("playback_position_sec").alias("max_watch_depth_sec"),
+            f.min("event_timestamp").alias("session_start"),
+            f.max("event_timestamp").alias("session_end"),
+            f.count(f.when(f.col("event_type") == "buffer_start", 1)).alias("buffer_event_count"),
+            f.count(f.when(f.col("event_type") == "error", 1)).alias("error_event_count"),
+        )
+        .select(
+            f.col("event_session.start").alias("event_session_start"),
+            f.col("event_session.end").alias("event_session_end"),
+            "content_id",
+            "session_id",
+            "user_id",
+            "max_watch_depth_sec",
+            "session_start",
+            "session_end",
+            "buffer_event_count",
+            "error_event_count",
+        )
+        .withColumn("computed_at", f.current_timestamp())
     )
 
 
@@ -73,18 +168,7 @@ def top_trending_titles():
     },
 )
 def content_engagement():
-    session_stats = (
-        dp.read("streampulse.silver.user_playback_events")
-        .groupBy("content_id", "session_id", "user_id")
-        .agg(
-            # Deepest point reached in the content
-            f.max("playback_position_sec").alias("max_watch_depth_sec"),
-            f.min("event_timestamp").alias("session_start"),
-            f.max("event_timestamp").alias("session_end"),
-            f.count(f.when(f.col("event_type") == "buffer_start", 1)).alias("buffer_event_count"),
-            f.count(f.when(f.col("event_type") == "error", 1)).alias("error_event_count"),
-        )
-    )
+    session_stats = dp.read("streampulse.gold.content_session_stats")
 
     content_dim = (
         dp.read("streampulse.silver.content_catalog_dim")
@@ -117,6 +201,8 @@ def content_engagement():
             f.unix_timestamp("session_end") - f.unix_timestamp("session_start"),
         )
         .select(
+            "event_session_start",
+            "event_session_end",
             "content_id",
             "session_id",
             "user_id",
