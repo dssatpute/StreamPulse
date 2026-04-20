@@ -34,5 +34,4 @@ With StreamPulse, teams can:
 
 ## Visual references
 
-- Architecture overview: ARCHITECTURE_DIAGRAM.md
-- Gold table lineage: GOLD_LINEAGE_GRAPH.md
+![StreamPulse Architecture](./StreamPulse%20Architecture.png)
