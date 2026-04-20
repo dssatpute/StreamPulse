@@ -87,6 +87,7 @@ def top_trending_titles():
         latest_viewer_counts
         .join(content_dim, "content_id", "left")
         .withColumn("rank", f.rank().over(rank_window))
+        .withColumn("content_name", f.col("title"))
         .filter(f.col("rank") <= 10)
         .withColumn("computed_at", f.current_timestamp())
         .select(
@@ -94,6 +95,7 @@ def top_trending_titles():
             "window_start",
             "window_end",
             "content_id",
+            "content_name",
             "title",
             "genre",
             "content_type",
@@ -185,6 +187,7 @@ def content_engagement():
     return (
         session_stats
         .join(content_dim, "content_id", "left")
+        .withColumn("content_name", f.col("title"))
         # completion_rate = watch depth / total duration, capped at 1.0
         .withColumn(
             "completion_rate",
@@ -204,6 +207,7 @@ def content_engagement():
             "event_session_start",
             "event_session_end",
             "content_id",
+            "content_name",
             "session_id",
             "user_id",
             "title",
