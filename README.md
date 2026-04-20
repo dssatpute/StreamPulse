@@ -35,3 +35,7 @@ With StreamPulse, teams can:
 ## Visual references
 
 ![StreamPulse Architecture](./StreamPulse%20Architecture.png)
+
+![StreamPulse Dashboard 1](./StreamPulse%20Churn%20Analysis%20Dashboard.png)
+
+![StreamPulse Dashboard 2](./StreamPulse%20Session%20Stats%20Dashboard.png)
