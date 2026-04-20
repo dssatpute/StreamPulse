@@ -60,7 +60,7 @@ def trending_title_viewers_5m():
     },
 )
 def top_trending_titles():
-    viewer_counts = dp.read("streampulse.gold.trending_title_viewers_5m")
+    viewer_counts = spark.read.table("streampulse.gold.trending_title_viewers_5m")
 
     latest_window = viewer_counts.agg(f.max("window_end").alias("latest_window_end"))
 
@@ -75,7 +75,7 @@ def top_trending_titles():
     )
 
     content_dim = (
-        dp.read("streampulse.silver.content_catalog_dim")
+        spark.read.table("streampulse.silver.content_catalog_dim")
         .filter(f.col("__END_AT").isNull())  # current SCD2 snapshot
         .select("content_id", "title", "genre", "content_type", "release_year", "maturity_rating")
     )
@@ -87,6 +87,7 @@ def top_trending_titles():
         latest_viewer_counts
         .join(content_dim, "content_id", "left")
         .withColumn("rank", f.rank().over(rank_window))
+        .withColumn("content_name", f.col("title"))
         .filter(f.col("rank") <= 10)
         .withColumn("computed_at", f.current_timestamp())
         .select(
@@ -94,6 +95,7 @@ def top_trending_titles():
             "window_start",
             "window_end",
             "content_id",
+            "content_name",
             "title",
             "genre",
             "content_type",
@@ -106,7 +108,7 @@ def top_trending_titles():
 
 
 @dp.table(
-    name="streampulse.gold.content_session_stats",
+    name="streampulse.gold.content_session_stats_v2",
     comment=(
         "Streaming per-session playback aggregates using event-time session windows. "
         "Watermarking bounds state and limits late-arrival impact."
@@ -116,15 +118,29 @@ def top_trending_titles():
         "delta.autoOptimize.optimizeWrite": "true",
     },
 )
-def content_session_stats():
+def content_session_stats_v2():
     playback_events = (
         spark.readStream.table("streampulse.silver.user_playback_events")
         .withWatermark("event_timestamp", ENGAGEMENT_WATERMARK_DELAY)
         .dropDuplicates(["event_id"])
     )
 
+    content_dim = (
+        spark.read.table("streampulse.silver.content_catalog_dim")
+        .filter(f.col("__END_AT").isNull())  # current SCD2 snapshot
+        .selectExpr("content_id", "title as content_name"))
+
     return (
         playback_events
+        # Explicitly select columns needed for aggregation to avoid column resolution issues
+        .select(
+            "event_timestamp",
+            "content_id",
+            "session_id",
+            "user_id",
+            "playback_position_sec",
+            "event_type"
+        )
         .groupBy(
             f.session_window("event_timestamp", ENGAGEMENT_SESSION_GAP_DURATION).alias("event_session"),
             f.col("content_id"),
@@ -138,10 +154,12 @@ def content_session_stats():
             f.count(f.when(f.col("event_type") == "buffer_start", 1)).alias("buffer_event_count"),
             f.count(f.when(f.col("event_type") == "error", 1)).alias("error_event_count"),
         )
+        .join(content_dim, "content_id", "left")
         .select(
             f.col("event_session.start").alias("event_session_start"),
             f.col("event_session.end").alias("event_session_end"),
             "content_id",
+            'content_name',
             "session_id",
             "user_id",
             "max_watch_depth_sec",
@@ -168,10 +186,10 @@ def content_session_stats():
     },
 )
 def content_engagement():
-    session_stats = dp.read("streampulse.gold.content_session_stats")
+    session_stats = spark.read.table("streampulse.gold.content_session_stats")
 
     content_dim = (
-        dp.read("streampulse.silver.content_catalog_dim")
+        spark.read.table("streampulse.silver.content_catalog_dim")
         .filter(f.col("__END_AT").isNull())
         .select(
             "content_id",
@@ -185,6 +203,7 @@ def content_engagement():
     return (
         session_stats
         .join(content_dim, "content_id", "left")
+        .withColumn("content_name", f.col("title"))
         # completion_rate = watch depth / total duration, capped at 1.0
         .withColumn(
             "completion_rate",
@@ -204,6 +223,7 @@ def content_engagement():
             "event_session_start",
             "event_session_end",
             "content_id",
+            "content_name",
             "session_id",
             "user_id",
             "title",
@@ -238,7 +258,7 @@ def subscription_churn_signals():
 
     # Engagement signals over the past 7 days
     engagement = (
-        dp.read("streampulse.silver.user_playback_events")
+        spark.read.table("streampulse.silver.user_playback_events")
         .filter(f.col("event_timestamp") >= seven_days_ago)
         .groupBy("user_id")
         .agg(
@@ -251,7 +271,7 @@ def subscription_churn_signals():
 
     # Current snapshot only from SCD2: __END_AT IS NULL = active/latest row
     profiles = (
-        dp.read("streampulse.silver.user_profile_dim")
+        spark.read.table("streampulse.silver.user_profile_dim")
         .filter(f.col("__END_AT").isNull())
         .select(
             "user_id",
@@ -299,4 +319,3 @@ def subscription_churn_signals():
         )
         .orderBy("churn_risk", f.col("weekly_sessions").asc())
     )
-
