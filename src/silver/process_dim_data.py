@@ -1,7 +1,7 @@
 from pyspark import pipelines as dp
 
 
-@dp.create_view(name="user_profile_dim_clean")
+@dp.temporary_view(name="user_profile_dim_clean")
 def user_profile_dim_clean():
     return spark.readStream.table("streampulse.bronze.user_profile_dim").select(
         "user_id",
@@ -31,7 +31,7 @@ dp.create_auto_cdc_flow(
 )
 
 
-@dp.create_view(name="content_catalog_dim_clean")
+@dp.temporary_view(name="content_catalog_dim_clean")
 def content_catalog_dim_clean():
     return spark.readStream.table("streampulse.bronze.content_catalog_dim").select(
         "title",
