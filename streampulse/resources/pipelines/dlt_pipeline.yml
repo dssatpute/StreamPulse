@@ -1,0 +1,14 @@
+resources:
+  pipelines:
+    pipeline_streampulse_dlt:
+      name: streampulse_dlt
+      libraries:
+        - glob:
+            include: ../../src/pipeline
+      schema: ${var.schema}
+      continuous: false
+      development: false
+      channel: CURRENT
+      catalog: ${var.catalog}
+      serverless: true
+      root_path: ../../src/pipeline
