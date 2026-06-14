@@ -1,0 +1,17 @@
+# Variables for StreamPulse DAB Bundle
+
+variables:
+  # Environment-specific variables
+  catalog :
+    default : main
+  schema:
+    default : streampulse_dev
+
+targets:
+  dev:
+    variables:
+      schema : streampulse_dev
+
+  prod:
+    variables:
+      schema : streampulse_prod
