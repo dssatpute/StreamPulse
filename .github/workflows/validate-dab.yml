@@ -1,0 +1,66 @@
+name: Validate Databricks Bundle
+
+on:
+  pull_request:
+    paths:
+      - "streampulse/**"
+      - ".github/workflows/validate-dab.yml"
+  push:
+    branches:
+      - main
+      - feature/**
+    paths:
+      - "streampulse/**"
+      - ".github/workflows/validate-dab.yml"
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    env:
+      DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
+      DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+    defaults:
+      run:
+        working-directory: streampulse
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Set up Databricks CLI
+        uses: databricks/setup-cli@main
+
+      - name: Verify Databricks authentication
+        run: databricks auth env
+
+      - name: Validate Databricks bundle
+        run: databricks bundle validate --target dev
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: validate
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    env:
+      DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
+      DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+    defaults:
+      run:
+        working-directory: streampulse
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Databricks CLI
+        uses: databricks/setup-cli@main
+
+      - name: Verify Databricks authentication
+        run: databricks auth env
+
+      - name: Deploy Databricks bundle
+        run: databricks bundle deploy --target prod
