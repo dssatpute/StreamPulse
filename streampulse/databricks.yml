@@ -30,5 +30,5 @@ targets:
     presets: 
       name_prefix : prod_${workspace.current_user.short_name} 
     permissions:
-      - user_name: admins
+      - user_name: dnyaneshss99@gmail.com
         level: CAN_MANAGE
