@@ -4,8 +4,8 @@ variables:
   # Environment-specific variables
   catalog :
     default : main
-  {# schema:
-    default : streampulse_dev #}
+  schema:
+    default : streampulse_dev
 
 targets:
   dev:
