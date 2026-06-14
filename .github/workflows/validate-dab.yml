@@ -16,6 +16,9 @@ on:
 jobs:
   validate:
     runs-on: ubuntu-latest
+    env:
+      DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
+      DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
     defaults:
       run:
         working-directory: streampulse
@@ -24,8 +27,16 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
+    - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
       - name: Set up Databricks CLI
         uses: databricks/setup-cli@main
+
+      - name: Verify Databricks authentication
+        run: databricks auth env
 
       - name: Validate Databricks bundle
         run: databricks bundle validate --target dev
