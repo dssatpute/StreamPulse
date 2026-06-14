@@ -1,0 +1,31 @@
+name: Validate Databricks Bundle
+
+on:
+  pull_request:
+    paths:
+      - "streampulse/**"
+      - ".github/workflows/validate-dab.yml"
+  push:
+    branches:
+      - main
+      - feature/**
+    paths:
+      - "streampulse/**"
+      - ".github/workflows/validate-dab.yml"
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: streampulse
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Databricks CLI
+        uses: databricks/setup-cli@main
+
+      - name: Validate Databricks bundle
+        run: databricks bundle validate --target dev
